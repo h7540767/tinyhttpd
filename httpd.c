@@ -22,7 +22,8 @@
 #include <strings.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <pthread.h>
+#include <errno.h>
+//#include <pthread.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 
@@ -62,6 +63,7 @@ void accept_request(int client)
  char *query_string = NULL;
 
  numchars = get_line(client, buf, sizeof(buf));
+
  i = 0; j = 0;
  while (!ISspace(buf[j]) && (i < sizeof(method) - 1))
  {
@@ -117,11 +119,16 @@ void accept_request(int client)
   if ((st.st_mode & S_IXUSR) ||
       (st.st_mode & S_IXGRP) ||
       (st.st_mode & S_IXOTH)    )
-   cgi = 1;
+   //cgi = 1;
   if (!cgi)
-   serve_file(client, path);
+  {
+    serve_file(client, path);
+  }
   else
-   execute_cgi(client, path, method, query_string);
+  {
+    execute_cgi(client, path, method, query_string);
+  }
+   
  }
 
  close(client);
@@ -216,8 +223,11 @@ void execute_cgi(int client, const char *path,
 
  buf[0] = 'A'; buf[1] = '\0';
  if (strcasecmp(method, "GET") == 0)
-  while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
-   numchars = get_line(client, buf, sizeof(buf));
+ {
+    while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
+        numchars = get_line(client, buf, sizeof(buf));
+ }
+  
  else    /* POST */
  {
   numchars = get_line(client, buf, sizeof(buf));
@@ -236,7 +246,6 @@ void execute_cgi(int client, const char *path,
 
  sprintf(buf, "HTTP/1.0 200 OK\r\n");
  send(client, buf, strlen(buf), 0);
-
  if (pipe(cgi_output) < 0) {
   cannot_execute(client);
   return;
@@ -250,12 +259,12 @@ void execute_cgi(int client, const char *path,
   cannot_execute(client);
   return;
  }
+ 
  if (pid == 0)  /* child: CGI script */
  {
   char meth_env[255];
   char query_env[255];
   char length_env[255];
-
   dup2(cgi_output[1], 1);
   dup2(cgi_input[0], 0);
   close(cgi_output[0]);
@@ -479,7 +488,7 @@ int main(void)
  int client_sock = -1;
  struct sockaddr_in client_name;
  int client_name_len = sizeof(client_name);
- pthread_t newthread;
+ //pthread_t newthread;
 
  server_sock = startup(&port);
  printf("httpd running on port %d\n", port);
@@ -491,9 +500,12 @@ int main(void)
                        &client_name_len);
   if (client_sock == -1)
    error_die("accept");
- /* accept_request(client_sock); */
- if (pthread_create(&newthread , NULL, accept_request, client_sock) != 0)
-   perror("pthread_create");
+
+   //printf("accepting\n");
+   accept_request(client_sock);
+   //printf("done\n");
+ /*if (pthread_create(&newthread , NULL, accept_request, client_sock) != 0)
+   perror("pthread_create");*/
  }
 
  close(server_sock);
